@@ -274,35 +274,29 @@ class Search:
             searchstring = searchstring.replace(k, v)
 
         base_url = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&u=%2Fnetahtml%2FPTO%2Fsearch-adv.htm&r=0&p=1&f=S&l=50&Query='
-
         url = base_url + searchstring + '&d=PTXT'
         r = self.web_connection.get(url)
         s = BeautifulSoup(r, 'html.parser')
-        total_results = int(s.find(string=re.compile('out of')).find_next().text.strip())
 
-        patents = self.get_patents_from_results_url(url, limit=results_limit)
-
-        num_results_fetched = len(patents)
-
-        list_num = 2
-
-        base_url_nextpgs = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&u=%2Fnetahtml%2FPTO%2Fsearch-adv.htm&r=0&f=S&l=50&d=PTXT'
-
-        url_pre = base_url_nextpgs + '&OS=' + searchstring + '&RS=' + searchstring + '&Query=' + searchstring + '&TD=' + str(total_results) + '&Srch1=' + searchstring + '&NextList'
-        url_post = '=Next+50+Hits'
-
-        while (num_results_fetched < total_results) and (num_results_fetched < results_limit):
-            this_url = url_pre + str(list_num) + url_post
-            thispatents = self.get_patents_from_results_url(this_url)
-            patents.extend(thispatents)
-
+        if s.find(string=re.compile('out of')): #only proceed with function if search produces results
+            total_results = int(s.find(string=re.compile('out of')).find_next().text.strip())
+            patents = self.get_patents_from_results_url(url, limit=results_limit)
             num_results_fetched = len(patents)
+            list_num = 2
+            while (num_results_fetched < total_results) and (num_results_fetched < results_limit):
+                url_nextpg = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&u=%2Fnetahtml%2FPTO%2Fsearch-adv.htm&r=0&p={0}&f=S&l=50&Query={1}&d=PTXT'.format(list_num, searchstring)
 
-            if num_results_fetched >= results_limit:
-                patents = patents[:results_limit]
+                thispatents = self.get_patents_from_results_url(url_nextpg, limit=(results_limit - num_results_fetched))
+                patents.extend(thispatents)
 
-            list_num += 1
+                num_results_fetched = len(patents)
 
+                if num_results_fetched >= results_limit:
+                    patents = patents[:results_limit]
+
+                list_num += 1
+        else:
+            patents = []
         self.patents = patents
 
     def get_patents_from_results_url(self, url: str, limit: int = None) -> list:
@@ -314,18 +308,17 @@ class Search:
                             i.text.replace('\n', '').strip() != '']
 
         patents = []
-
         for patent_num_idx in range(0, len(patents_raw_list), 2):
-            if limit and (patent_num_idx + 1) > limit:
+            if limit and (patent_num_idx/2 + 1) > limit:
                 break
             patent_title = patents_raw_list[patent_num_idx + 1][0]
             patent_title = re.sub(' +', ' ', patent_title)
             patent_link = patents_raw_list[patent_num_idx][1]
+
             p = Patent(patent_title, patent_link, self.web_connection)
             if self.get_patent_details:
                 p.fetch_details()
             patents.append(p)
-
         return patents
 
     def as_dataframe(self) -> pd.DataFrame:
