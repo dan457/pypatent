@@ -58,15 +58,15 @@ pypatent.Search('TTL/(tennis AND (racquet OR racket))')
 
 Alternatively, you can specify one or more Field Code arguments to search within the specified fields. Multiple Field Code arguments will create a search with AND logic. OR logic can be used within a single argument. For more complex logic, use a custom string.
 ```python
-pypatent.Search(pn='adobe', ttl='software') # Equivalent to search('PN/adobe AND TTL/software')
-pypatent.Search(pn=('adobe or macromedia'), ttl='software') # Equivalent to search('PN/(adobe or macromedia) AND TTL/software')
+pypatent.Search(an='adobe', ttl='software') # Equivalent to search('AN/adobe AND TTL/software')
+pypatent.Search(an=('adobe or macromedia'), ttl='software') # Equivalent to search('AN/(adobe or macromedia) AND TTL/software')
 ```
 
 #### Combining search methods 1 and 2
 
 String criteria can be used in conjunction with Field Code arguments:
 ```python
-pypatent.Search('acrobat', pn='adobe', ttl='software') # Equivalent to search('acrobat AND PN/adobe AND TTL/software')
+pypatent.Search('acrobat', an='adobe', ttl='software') # Equivalent to search('acrobat AND AN/adobe AND TTL/software')
 ```
 
 The Field Code arguments have the same meaning as on the [USPTO site](http://patft.uspto.gov/netahtml/PTO/search-adv.htm).
