@@ -267,6 +267,7 @@ class Search:
         searchstring = ' AND '.join(['%s/%s' % (key, value) for (key, value) in args.items() if key not in ['results_limit']])
         searchstring = searchstring.replace('string/', '')
         searchstring = searchstring.replace(' ', '+')
+        searchstring = searchstring.replace('-and-', '+and+')
 
         replace_dict = {'/': '%2F'}
 
