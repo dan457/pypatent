@@ -6,7 +6,6 @@ import re
 import pandas as pd
 from selenium import webdriver
 
-
 class WebConnection:
     def __init__(self,
                  use_selenium: bool = False,
@@ -198,6 +197,7 @@ class Patent:
 
 
 class Search:
+
     def __init__(self,
                  string: str = None,
                  results_limit: int = 50,
@@ -263,14 +263,77 @@ class Search:
             self.web_connection = web_connection
         else:
             self.web_connection = WebConnection()
-        args = {k: str(v).replace(' ', '-') for k, v in locals().items() if v and v is not self and v not in [get_patent_details, results_limit, web_connection]}
-        searchstring = ' AND '.join(['%s/%s' % (key, value) for (key, value) in args.items() if key not in ['results_limit']])
+
+        args = {k: v.lower() for k, v in locals().items() if v and v is not self and v not in [get_patent_details, results_limit, web_connection]}
+
+        search_codes = dict({
+          'PN':  'Patent Number',
+          'ISD': 'Issue Date',
+          'TTL': 'Title',
+          'ABST': 'Abstract',
+          'ACLM': 'Claim(s)',
+          'SPEC': 'Description/Specification',
+          'CCL': 'Current US Classification',
+          'CPC': 'Current CPC Classification',
+          'CPCL': 'Current CPC Classification Class',
+          'ICL': 'International Classification',
+          'APN': 'Application Serial Number',
+          'APD': 'Application Date',
+          'APT': 'Application Type',
+          'GOVT': 'Government Interest',
+          'FMID': 'Patent Family ID',
+          'PARN': 'Parent Case Information',
+          'RLAP': 'Related US App. Data',
+          'RLFD': 'Related Application Filing Date',
+          'PRIR': 'Foreign Priority',
+          'PRAD': 'Priority Filing Date',
+          'PCT': 'PCT Information',
+          'PTAD': 'PCT Filing Date',
+          'PT3D': 'PCT 371c124 Date',
+          'PPPD': 'Prior Published Document Date',
+          'REIS': 'Reissue Data',
+          'RPAF': 'Reissued Patent Application Filing Date',
+          'AFFF': '130(b) Affirmation Flag',
+          'AFFT': '130(b) Affirmation Statement',
+          'IN': 'Inventor Name',
+          'IC': 'Inventor City',
+          'IS': 'Inventor State',
+          'ICN': 'Inventor Country',
+          'AANM': 'Applicant Name',
+          'AACI': 'Applicant City',
+          'AAST': 'Applicant State',
+          'AACO': 'Applicant Country',
+          'AAAT': 'Applicant Type',
+          'LREP': 'Attorney or Agent',
+          'AN': 'Assignee Name',
+          'AC': 'Assignee City',
+          'AS': 'Assignee State',
+          'ACN': 'Assignee Country',
+          'EXP': 'Primary Examiner',
+          'EXA': 'Assistant Examiner',
+          'REF': 'Referenced By',
+          'FREF': 'Foreign References',
+          'OREF': 'Other References',
+          'COFC': 'Certificate of Correction',
+          'REEX': 'Re-Examination Certificate',
+          'PTAB': 'PTAB Trial Certificate',
+          'SEC': 'Supplemental Exam Certificate',
+          'ILRN': 'International Registration Number',
+          'ILRD': 'International Registration Date',
+          'ILPD': 'International Registration Publication Date',
+          'ILFD': 'Hague International Filing Date'
+        })
+        for k, v in args.items():
+            if k == 'string' and '/' in v:
+                (kk, p, v) = v.partition('/')
+                if v and kk.upper() in search_codes:
+                    args[k] = '"{}"'.format(v)
+        searchstring = ' and '.join(['%s/%s' % (key, value) for (key, value) in args.items()])
         searchstring = searchstring.replace('string/', '')
         searchstring = searchstring.replace(' ', '+')
         searchstring = searchstring.replace('-and-', '+and+')
 
         replace_dict = {'/': '%2F'}
-
         for k, v in replace_dict.items():
             searchstring = searchstring.replace(k, v)
 
@@ -278,7 +341,6 @@ class Search:
         url = base_url + searchstring + '&d=PTXT'
         r = self.web_connection.get(url)
         s = BeautifulSoup(r, 'html.parser')
-
         if s.find(string=re.compile('out of')): #only proceed with function if search produces results
             total_results = int(s.find(string=re.compile('out of')).find_next().text.strip())
             patents = self.get_patents_from_results_url(url, limit=results_limit)
