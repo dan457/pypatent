@@ -4,44 +4,15 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import pandas as pd
-from selenium import webdriver
-
-
-class WebConnection:
-    def __init__(self,
-                 use_selenium: bool = False,
-                 selenium_driver: webdriver = None,
-                 user_agent: str = None,
-                 request_header: dict = None):
-        self.use_selenium = use_selenium
-        self.selenium_driver = selenium_driver
-
-        if user_agent is None:
-            self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-        else:
-            self.user_agent = user_agent
-        if request_header is None:
-            self.request_header = {'user-agent': self.user_agent}
-        else:
-            self.request_header = request_header
-
-    def get(self, url: str):
-        if self.use_selenium:
-            if self.selenium_driver is None:
-                raise ValueError('WebConnection.selenium_driver must point to a valid Selenium webdriver')
-            else:
-                self.selenium_driver.get(url)
-                return self.selenium_driver.page_source
-        else:
-            return requests.get(url, headers=self.request_header).text
+from random import randint
+from time import sleep
+class Constants:
+    user_agent = 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Raspbian Chromium/74.0.3729.157 Chrome/74.0.3729.157 Safari/537.36'
+    request_header = {'user-agent': user_agent, 'Connection':'close', 'Referer': 'http://patft.uspto.gov/netahtml/PTO/search-adv.htm'}
 
 
 class Patent:
-    def __init__(self, title: str, url: str, web_connection: WebConnection = None):
-        if web_connection is not None:
-            self.web_connection = web_connection
-        else:
-            self.web_connection = WebConnection()
+    def __init__(self, title: str, url: str):
         self.title = title
         self.url = url
         self.fetched_details = False
@@ -64,7 +35,31 @@ class Patent:
 
     def fetch_details(self):
         self.fetched_details = True
-        r = self.web_connection.get(self.url)
+        try:
+            sleeptime = randint(0,5)
+            sleep(sleeptime)
+            r = requests.get(self.url, headers=Constants.request_header,timeout=(10,30)).text
+        except Exception as e:
+            print('try again 1st time...')
+            try:
+                #sleeptime = randint(0,5)
+                sleep(30)
+                r = requests.get(self.url, headers=Constants.request_header,timeout=(10,30)).text
+            except Exception as e:
+                print('try again 2nd time...')
+                try:
+                    #sleeptime = randint(0,5)
+                    sleep(60)
+                    r = requests.get(self.url, headers=Constants.request_header,timeout=(10,30)).text
+                except Exception as e:
+                    print('try again 3nd time...')
+                    try:
+                        sleep(120)
+                        r = requests.get(self.url, headers=Constants.request_header,timeout=(10,30)).text
+                    except Exception as e:
+                    
+                        print('Error!')
+        
         s = BeautifulSoup(r, 'html.parser')
         try:
             self.patent_num = s.find(string='United States Patent ').find_next().text.replace('\n', '').strip()
@@ -199,10 +194,10 @@ class Patent:
 
 class Search:
     def __init__(self,
-                 string: str = None,
-                 results_limit: int = 50,
-                 get_patent_details: bool = True,
-                 web_connection: WebConnection = None,
+                 string=None,
+                 results_limit=50,
+                 get_patent_details=True,
+                 num=0,
                  pn=None,
                  isd=None,
                  ttl=None,
@@ -258,16 +253,15 @@ class Search:
                  ilrd=None,
                  ilpd=None,
                  ilfd=None):
+        self.num = num
         self.get_patent_details = get_patent_details
-        if web_connection is not None:
-            self.web_connection = web_connection
-        else:
-            self.web_connection = WebConnection()
-        args = {k: str(v).replace(' ', '-') for k, v in locals().items() if v and v is not self and v not in [get_patent_details, results_limit, web_connection]}
+        args = {k: str(v).replace('+', '-') for k, v in locals().items() if v and v is not self and v not in [get_patent_details, results_limit]}
+        #print(args)
         searchstring = ' AND '.join(['%s/%s' % (key, value) for (key, value) in args.items() if key not in ['results_limit']])
         searchstring = searchstring.replace('string/', '')
-        searchstring = searchstring.replace(' ', '+')
-
+        # searchstring = searchstring.replace('-', '+')
+        searchstring = searchstring.replace('/','%2F').\
+                      replace('(','%28').replace(' ','+').replace(')','%29')
         replace_dict = {'/': '%2F'}
 
         for k, v in replace_dict.items():
@@ -276,10 +270,27 @@ class Search:
         base_url = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&u=%2Fnetahtml%2FPTO%2Fsearch-adv.htm&r=0&p=1&f=S&l=50&Query='
 
         url = base_url + searchstring + '&d=PTXT'
-        r = self.web_connection.get(url)
+        #print(url)
+        try:
+            r = requests.get(url, headers=Constants.request_header).text
+        except Exception as e:
+            print('Try 1st time...')
+            try:
+                sleep(30)
+                r = requests.get(url, headers=Constants.request_header).text
+            except Exception as e:
+                try:
+                    sleep(60)
+                    r = requests.get(url, headers=Constants.request_header).text
+                except Exception as e:
+                    try:
+                        sleep(120)
+                        r = requests.get(url, headers=Constants.request_header).text
+                    except Exception as e:
+                        print('Error happened')
         s = BeautifulSoup(r, 'html.parser')
         total_results = int(s.find(string=re.compile('out of')).find_next().text.strip())
-
+        print('Totally {} patents about this search'.format(total_results))
         patents = self.get_patents_from_results_url(url, limit=results_limit)
 
         num_results_fetched = len(patents)
@@ -287,13 +298,25 @@ class Search:
         list_num = 2
 
         base_url_nextpgs = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&u=%2Fnetahtml%2FPTO%2Fsearch-adv.htm&r=0&f=S&l=50&d=PTXT'
-
-        url_pre = base_url_nextpgs + '&OS=' + searchstring + '&RS=' + searchstring + '&Query=' + searchstring + '&TD=' + str(total_results) + '&Srch1=' + searchstring + '&NextList'
+        osstring = s.find('input',attrs={'name':'OS'})['value'].replace('/','%2F').\
+                   replace('(','%28').replace(' ','+').replace(')','%29')
+        rsstring = s.find('input',attrs={'name':'RS'})['value'].replace('/','%2F').\
+                   replace('(','%28').replace(' ','+').replace(')','%29')
+        querystring = s.find('input',attrs={'name':'Query'})['value'].replace('/','%2F').\
+                      replace('(','%28').replace(' ','+').replace(')','%29')
+        tdstring = s.find('input',attrs={'name':'TD'})['value'].replace('/','%2F').\
+                   replace('(','%28').replace(' ','+').replace(')','%29')
+        srch1string = s.find('input',attrs={'name':'Srch1'})['value'].replace('/','%2F').\
+                      replace('(','%28').replace(' ','+').replace(')','%29')
+        url_pre = base_url_nextpgs + '&OS=' + osstring + '&RS=' + rsstring + '&Query=' +\
+                  querystring + '&TD=' + tdstring + '&Srch1=' + srch1string + '&NextList'
         url_post = '=Next+50+Hits'
 
         while (num_results_fetched < total_results) and (num_results_fetched < results_limit):
             this_url = url_pre + str(list_num) + url_post
-            thispatents = self.get_patents_from_results_url(this_url)
+            #print('starting "', this_url,'"')
+            thispatents = self.get_patents_from_results_url(this_url, results_limit)
+            #print('finish !',)
             patents.extend(thispatents)
 
             num_results_fetched = len(patents)
@@ -306,13 +329,29 @@ class Search:
         self.patents = patents
 
     def get_patents_from_results_url(self, url: str, limit: int = None) -> list:
-        r = self.web_connection.get(url)
+       
+        try:
+            r = requests.get(url, headers=Constants.request_header).text
+        except Exception as e:
+            try:
+                sleep(30)
+                r = requests.get(url, headers=Constants.request_header).text
+            except Exception as e:
+                try:
+                    sleep(60)
+                    r = requests.get(url, headers=Constants.request_header).text
+                except Exception as e:
+                    try:
+                        sleep(120)
+                        r = requests.get(url, headers=Constants.request_header).text
+                    except Exception as e:
+                        print('Error happened')
         s = BeautifulSoup(r, 'html.parser')
         patents_raw = s.find_all('a', href=re.compile('netacgi'))
         patents_base_url = 'http://patft.uspto.gov'
         patents_raw_list = [[i.text.replace('\n', '').strip(), patents_base_url + i['href']] for i in patents_raw if
                             i.text.replace('\n', '').strip() != '']
-
+        print(len(patents_raw_list))
         patents = []
 
         for patent_num_idx in range(0, len(patents_raw_list), 2):
@@ -321,8 +360,10 @@ class Search:
             patent_title = patents_raw_list[patent_num_idx + 1][0]
             patent_title = re.sub(' +', ' ', patent_title)
             patent_link = patents_raw_list[patent_num_idx][1]
-            p = Patent(patent_title, patent_link, self.web_connection)
+            p = Patent(patent_title, patent_link)
             if self.get_patent_details:
+                print('Downloading number{}: "{}" now...'.format(self.num,patent_title))
+                self.num =self.num+1
                 p.fetch_details()
             patents.append(p)
 
@@ -339,3 +380,7 @@ class Search:
 
     def __repr__(self):
         return str(self.as_dataframe())
+
+
+
+ 
